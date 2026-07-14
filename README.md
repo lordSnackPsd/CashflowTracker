@@ -1,97 +1,84 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Flouss 💸 — Freelance Cash Flow Tracker
 
-# Getting Started
+A premium, offline-first personal finance tracker tailored specifically for freelancers and irregular-income earners. Built with **React Native (Expo)**, **TypeScript**, and **SQLite**.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+Developed & Maintained by **AMADYN STUDIO - @LORDSNACK.PSD**.
 
-## Step 1: Start Metro
+---
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## 📖 Project Overview
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+Unlike standard budgeting apps that assume a fixed monthly salary, **Flouss** is built for the non-linear nature of freelance income. It accounts for irregular client payouts, partial invoice advances, late payments, and complex credit card structures. 
 
-```sh
-# Using npm
-npm start
+The app adheres to a clean, informational, and non-judgmental product philosophy:
+- **On-Demand Reconciliation**: Reconcile balances on your own schedule without nagging notifications.
+- **Zero Cloud Dependency**: Offline-first design with local-only storage for maximum privacy and performance.
+- **Highly Extensible**: All categories, accounts, and items are user-defined.
+- **Safe Archiving**: A dual-confirmation delete model prevents accidental data loss.
 
-# OR using Yarn
-yarn start
-```
+---
 
-## Step 2: Build and run your app
+## ✨ Key Features
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+### 💵 1. Irregular Income & Client Billing
+- Tag income transactions as client work or personal transfers (e.g., roommate reimbursements).
+- Manage client profiles with tax details (`Matricule Fiscal`) and custom logos.
+- Track **Scheduled Payments** and **Advances**: log a partial payment, set a due date for the remainder, and manage outstanding balances as "Expected Income."
 
-### Android
+### 📝 2. Quick-Add Expense Flow
+- High-speed interactions that complete in under 3 seconds.
+- **On-Device Merchant Learning**: Automatically maps normalized description text to categories based on frequency (no external ML models or network requests required).
+- **Amount Matching**: Automatically surfaces suggested items based on historical transactions within a ±10% tolerance band.
 
-```sh
-# Using npm
-npm run android
+### 💳 3. Multi-Type Debt Engine
+Flouss handles three distinct types of liabilities, each driving its own progress bars and calculations:
+- **Term Loans**: Fixed payoff target tracking with split calculations for principal, interest, and penalties (late fees).
+- **Revolving Credit**: Spendable floats (credit cards) integrated directly as tiles in the Home accounts grid. repayments calculate net principal freed and bank interest charges automatically.
+- **Friend Loans**: Standard interest-free/fee-free personal borrowing.
 
-# OR using Yarn
-yarn android
-```
+### 📊 4. The "Unbilled Spending" Metric
+- Run manual balance reconciliation checks on any account.
+- Compares the `expected_balance` (from transaction log calculations) against the user's `actual_balance` to compute the **unbilled spending** since the last reconciliation.
+- Surfaced as an active status alert box on the Home dashboard when unlogged spending exceeds threshold limits configured in Settings.
 
-### iOS
+### 🔄 5. Monthly Review & Insights
+- Strict calendar month summaries comparing income vs. spending.
+- Aggregates tracked vs. unbilled totals, category breakdowns, and client payment trends.
+- Surfaced short narrative logs summarizing debt trajectories and savings opportunities.
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+---
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+## 🛠️ Technical Architecture
 
-```sh
-bundle install
-```
+- **Core Framework**: React Native + TypeScript (Expo environment).
+- **Local Database**: SQLite (`op-sqlite`) using a relational structure with UUID primary keys.
+- **Local Notifications**: Opt-in scheduled reminders for due dates.
+- **File System & Sharing**: Raw JSON database backup exports/restores and CSV report exports.
+- **Dark Mode**: High-fidelity dark mode matching colors, gradients, and elevation.
 
-Then, and every time you update your native dependencies, run:
+---
 
-```sh
-bundle exec pod install
-```
+## 🚀 Getting Started
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+### Prerequisites
+- Node.js (version `>= 22.11.0`)
+- Android SDK / Emulator (or physical device)
 
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+### Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/lordSnackPsd/CashflowTracker.git
+   cd CashflowTracker
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the Metro bundler:
+   ```bash
+   npx react-native start
+   ```
+4. Build and run on Android:
+   ```bash
+   npx react-native run-android
+   ```
