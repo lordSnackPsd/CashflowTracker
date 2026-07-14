@@ -75,7 +75,7 @@ export function CategoriesScreen() {
         <Sheet title="New category" onClose={() => setShowAdd(false)}>
           <Field label="Name"><Input value={addName} onChangeText={setAddName} placeholder="e.g. Groceries" autoFocus /></Field>
           <Field label="Emoji"><EmojiPicker value={addEmoji} onChange={setAddEmoji} /></Field>
-          {saving ? <ActivityIndicator color={colors.gold} /> : <Button label="Add" onPress={handleAdd} disabled={!addName.trim()} style={{ marginTop: 8 }} />}
+          {saving ? <ActivityIndicator color={colors.gold} /> : <Button title="Add" onPress={handleAdd} disabled={!addName.trim()} style={{ marginTop: 8 }} />}
         </Sheet>
       )}
     </View>

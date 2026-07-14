@@ -20,6 +20,7 @@ import { Sheet, Button, Field, Input, Select, useToast } from '../../theme/compo
 import { colors, money, radii, spacing, typeScale } from '../../theme/tokens';
 import type { TabParamList, RootStackParamList } from '../../navigation/types';
 import { todayIso } from '../../db/client';
+import { schedulePaymentReminder } from '../../services/notifications';
 
 type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<TabParamList, 'Business'>,
@@ -45,6 +46,7 @@ export function BusinessScreen() {
   const [lpAmount, setLpAmount] = useState('');
   const [lpIsAdvance, setLpIsAdvance] = useState(false);
   const [lpTotalAgreed, setLpTotalAgreed] = useState('');
+  const [lpDueDate, setLpDueDate] = useState('');
   const [saving, setSaving] = useState(false);
 
   // add client form
@@ -104,6 +106,9 @@ export function BusinessScreen() {
     if (!amount || !lpClientId || !lpAccountId) return;
     setSaving(true);
     try {
+      const clientObj = clients.find(c => c.id === lpClientId);
+      const clientName = clientObj ? clientObj.name : 'Client';
+
       const tx = await repos.transactions.create({
         accountId: lpAccountId,
         type: 'income',
@@ -122,26 +127,46 @@ export function BusinessScreen() {
       });
       if (lpIsAdvance) {
         const total = parseFloat(lpTotalAgreed) || amount;
+        let notifId: string | null = null;
+        if (lpDueDate) {
+          try {
+            notifId = await schedulePaymentReminder(
+              `sp-${lpClientId}-${Date.now()}`,
+              clientName,
+              total - amount,
+              currency,
+              lpDueDate,
+              '11:00'
+            );
+          } catch (e) {
+            console.error('Failed to schedule reminder:', e);
+          }
+        }
+
         await repos.scheduledPayments.create({
           clientId: lpClientId,
           totalAmount: total,
           receivedSoFar: amount,
-          remainingAmount: total - amount,
-          dueDate: null,
+          dueDate: lpDueDate || null,
           reminderTime: '11:00',
           status: amount >= total ? 'completed' : 'partially_paid',
           advanceTransactionId: tx.id,
-          notificationId: null,
+          notificationId: notifId,
         });
       }
       bumpData();
       setShowLogPayment(false);
-      setLpAmount(''); setLpTotalAgreed(''); setLpIsAdvance(false);
+      setLpAmount('');
+      setLpTotalAgreed('');
+      setLpDueDate('');
+      setLpIsAdvance(false);
+      setLpClientId('');
+      setLpAccountId('');
       toast.show(`Logged ${money(amount)} ${currency} from client`);
     } finally {
       setSaving(false);
     }
-  }, [lpAmount, lpClientId, lpAccountId, lpIsAdvance, lpTotalAgreed, bumpData, currency, toast]);
+  }, [lpAmount, lpClientId, lpAccountId, lpIsAdvance, lpTotalAgreed, lpDueDate, clients, currency, bumpData, toast]);
 
   const clientOptions = clients.map(c => ({ value: c.id, label: c.name }));
   const accountOptions = accounts.map(a => ({ value: a.id, label: a.name }));
@@ -218,7 +243,7 @@ export function BusinessScreen() {
           <Field label="Contact name"><Input value={addContact} onChangeText={setAddContact} placeholder="Optional" /></Field>
           <Field label="Email"><Input value={addEmail} onChangeText={setAddEmail} placeholder="Optional" keyboardType="email-address" /></Field>
           <Field label="Phone"><Input value={addPhone} onChangeText={setAddPhone} placeholder="Optional" keyboardType="phone-pad" /></Field>
-          {saving ? <ActivityIndicator color={colors.gold} /> : <Button label="Add client" onPress={handleAddClient} disabled={!addName.trim()} style={{ marginTop: 8 }} />}
+          {saving ? <ActivityIndicator color={colors.gold} /> : <Button title="Add client" onPress={handleAddClient} disabled={!addName.trim()} style={{ marginTop: 8 }} />}
         </Sheet>
       )}
 
@@ -242,12 +267,17 @@ export function BusinessScreen() {
           </Pressable>
 
           {lpIsAdvance && (
-            <Field label="Total agreed amount">
-              <Input value={lpTotalAgreed} onChangeText={setLpTotalAgreed} keyboardType="decimal-pad" placeholder="0" />
-            </Field>
+            <>
+              <Field label="Total agreed amount">
+                <Input value={lpTotalAgreed} onChangeText={setLpTotalAgreed} keyboardType="decimal-pad" placeholder="0" />
+              </Field>
+              <Field label="Due date (YYYY-MM-DD, optional)">
+                <Input value={lpDueDate} onChangeText={setLpDueDate} placeholder={todayIso()} />
+              </Field>
+            </>
           )}
 
-          {saving ? <ActivityIndicator color={colors.gold} /> : <Button label="Log payment" onPress={handleLogPayment} disabled={!lpClientId || !lpAccountId || !lpAmount} style={{ marginTop: 8 }} />}
+          {saving ? <ActivityIndicator color={colors.gold} /> : <Button title="Log payment" onPress={handleLogPayment} disabled={!lpClientId || !lpAccountId || !lpAmount} style={{ marginTop: 8 }} />}
         </Sheet>
       )}
     </ScrollView>

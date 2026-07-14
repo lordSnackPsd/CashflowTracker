@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, StatusBar, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { QuickAddProvider } from './src/context/QuickAddContext';
 import { AppNavigation } from './src/navigation';
@@ -11,6 +11,7 @@ import { colors } from './src/theme/tokens';
 
 function Root() {
   const { ready } = useApp();
+  const insets = useSafeAreaInsets();
 
   if (!ready) {
     return (
@@ -21,10 +22,10 @@ function Root() {
   }
 
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <AppNavigation />
       <QuickAddHost />
-    </>
+    </View>
   );
 }
 

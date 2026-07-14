@@ -113,7 +113,7 @@ export function CashManagementScreen() {
           <Field label="Starting balance (optional)">
             <Input value={addStarting} onChangeText={setAddStarting} keyboardType="decimal-pad" placeholder="0" />
           </Field>
-          {saving ? <ActivityIndicator color={colors.gold} /> : <Button label="Add account" onPress={handleAdd} disabled={!addName.trim()} style={{ marginTop: 8 }} />}
+          {saving ? <ActivityIndicator color={colors.gold} /> : <Button title="Add account" onPress={handleAdd} disabled={!addName.trim()} style={{ marginTop: 8 }} />}
         </Sheet>
       )}
     </View>

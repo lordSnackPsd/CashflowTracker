@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { DrawerNavigationProp } from '@react-navigation/drawer';
@@ -7,9 +7,13 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { repos } from '../../db/repositories';
 import { useApp } from '../../context/AppContext';
-import { Select, Field, Input, Button } from '../../theme/components';
+import { Select, Field, Input, Button, Sheet } from '../../theme/components';
 import { colors, radii, typeScale } from '../../theme/tokens';
 import type { DrawerParamList, RootStackParamList } from '../../navigation/types';
+
+import { exportTransactionsToCSV } from '../../services/csvExport';
+import { exportBackup, importBackup } from '../../services/backup';
+import RNFS from 'react-native-fs';
 
 type Nav = CompositeNavigationProp<
   DrawerNavigationProp<DrawerParamList>,
@@ -32,11 +36,15 @@ const CURRENCIES = [
 
 export function SettingsScreen() {
   const navigation = useNavigation<Nav>();
-  const { settings, reloadSettings } = useApp();
+  const { settings, reloadSettings, ready, bumpData } = useApp();
 
   const [alertMode, setAlertMode] = useState(settings?.unloggedSpendingAlertMode ?? '');
   const [alertValue, setAlertValue] = useState(String(settings?.unloggedSpendingAlertValue ?? ''));
   const [currency, setCurrency] = useState(settings?.currency ?? 'TND');
+
+  const [importPath, setImportPath] = useState(`${RNFS.DocumentDirectoryPath}/cashflow_backup.json`);
+  const [showImportSheet, setShowImportSheet] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (settings) {
@@ -54,6 +62,56 @@ export function SettingsScreen() {
     });
     await reloadSettings();
   }, [currency, alertMode, alertValue, reloadSettings]);
+
+  const handleExportCSV = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [txs, cats, its, accs] = await Promise.all([
+        repos.transactions.list({ includeArchived: true }),
+        repos.categories.list(true),
+        repos.items.list(true),
+        repos.accounts.list(true),
+      ]);
+      await exportTransactionsToCSV(txs, cats, its, accs);
+    } catch (err: any) {
+      Alert.alert('CSV Export Failed', err.message || String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleExportBackup = useCallback(async () => {
+    setLoading(true);
+    try {
+      await exportBackup();
+    } catch (err: any) {
+      Alert.alert('Backup Export Failed', err.message || String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleImportBackup = useCallback(async () => {
+    if (!importPath) return;
+    setLoading(true);
+    try {
+      // Check if file exists
+      const exists = await RNFS.exists(importPath);
+      if (!exists) {
+        Alert.alert('Import Failed', `File does not exist at path:\n${importPath}`);
+        return;
+      }
+      await importBackup(importPath);
+      bumpData();
+      await reloadSettings();
+      setShowImportSheet(false);
+      Alert.alert('Success', 'Backup imported successfully!');
+    } catch (err: any) {
+      Alert.alert('Import Failed', err.message || String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [importPath, bumpData, reloadSettings]);
 
   return (
     <ScrollView style={s.root} contentContainerStyle={s.content}>
@@ -81,17 +139,19 @@ export function SettingsScreen() {
         onChange={setAlertMode}
       />
       {!!alertMode && (
-        <Field label="Threshold value" style={{ marginTop: 12 }}>
-          <Input
-            value={alertValue}
-            onChangeText={setAlertValue}
-            keyboardType="decimal-pad"
-            placeholder="0"
-          />
-        </Field>
+        <View style={{ marginTop: 12 }}>
+          <Field label="Threshold value">
+            <Input
+              value={alertValue}
+              onChangeText={setAlertValue}
+              keyboardType="decimal-pad"
+              placeholder="0"
+            />
+          </Field>
+        </View>
       )}
 
-      <Button label="Save settings" onPress={save} style={s.saveBtn} />
+      <Button title="Save settings" onPress={save} style={s.saveBtn} />
 
       <Text style={[s.sectionLabel, { marginTop: 32 }]}>Data</Text>
       <Pressable
@@ -102,14 +162,46 @@ export function SettingsScreen() {
         <ChevronRight size={14} color={colors.faint} />
       </Pressable>
 
-      <View style={[s.row, { marginTop: 8 }]}>
+      <Pressable style={[s.row, { marginTop: 8 }]} onPress={handleExportCSV}>
         <Text style={s.rowText}>Export CSV</Text>
-        <Text style={s.comingSoon}>Coming soon</Text>
-      </View>
-      <View style={[s.row, { marginTop: 8 }]}>
-        <Text style={s.rowText}>Backup &amp; restore</Text>
-        <Text style={s.comingSoon}>Coming soon</Text>
-      </View>
+        <ChevronRight size={14} color={colors.faint} />
+      </Pressable>
+
+      <Pressable style={[s.row, { marginTop: 8 }]} onPress={handleExportBackup}>
+        <Text style={s.rowText}>Export Backup</Text>
+        <ChevronRight size={14} color={colors.faint} />
+      </Pressable>
+
+      <Pressable style={[s.row, { marginTop: 8 }]} onPress={() => setShowImportSheet(true)}>
+        <Text style={s.rowText}>Import Backup</Text>
+        <ChevronRight size={14} color={colors.faint} />
+      </Pressable>
+
+      {showImportSheet && (
+        <Sheet title="Import Backup" onClose={() => setShowImportSheet(false)}>
+          <Text style={s.reconNote}>
+            Warning: Importing a backup will overwrite all current on-device data.
+          </Text>
+          <Field label="Backup File Path">
+            <Input
+              value={importPath}
+              onChangeText={setImportPath}
+              placeholder="Enter absolute JSON file path"
+              autoFocus
+            />
+          </Field>
+          {loading ? (
+            <ActivityIndicator color={colors.gold} style={{ marginVertical: 12 }} />
+          ) : (
+            <Button
+              title="Import Backup"
+              onPress={handleImportBackup}
+              disabled={!importPath}
+              style={{ marginTop: 8 }}
+            />
+          )}
+        </Sheet>
+      )}
     </ScrollView>
   );
 }
@@ -124,4 +216,5 @@ const s = StyleSheet.create({
   rowText: { fontSize: typeScale.lg, color: colors.text },
   comingSoon: { fontSize: typeScale.sm, color: colors.faint, fontStyle: 'italic' },
   saveBtn: { marginTop: 20 },
+  reconNote: { fontSize: typeScale.md, color: colors.dim, marginBottom: 12 },
 });

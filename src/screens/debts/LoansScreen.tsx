@@ -272,7 +272,7 @@ export function LoansScreen() {
 
           {saving
             ? <ActivityIndicator color={colors.gold} style={{ marginTop: 12 }} />
-            : <Button label="Add" onPress={handleAdd} disabled={!addName.trim()} style={{ marginTop: 8 }} />}
+            : <Button title="Add" onPress={handleAdd} disabled={!addName.trim()} style={{ marginTop: 8 }} />}
         </Sheet>
       )}
     </View>

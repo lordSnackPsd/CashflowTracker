@@ -134,7 +134,7 @@ export function CategoryDetailScreen() {
             <Text style={s.toggleLabel}>Want to spend less on this?</Text>
             <View style={[s.toggle, catLess && s.toggleOn]}><View style={[s.toggleThumb, catLess && s.toggleThumbOn]} /></View>
           </Pressable>
-          {saving ? <ActivityIndicator color={colors.gold} /> : <Button label="Save" onPress={handleSaveCat} style={{ marginTop: 8 }} />}
+          {saving ? <ActivityIndicator color={colors.gold} /> : <Button title="Save" onPress={handleSaveCat} style={{ marginTop: 8 }} />}
         </Sheet>
       )}
 
@@ -146,7 +146,7 @@ export function CategoryDetailScreen() {
             <Text style={s.toggleLabel}>Want to spend less on this?</Text>
             <View style={[s.toggle, itemLess && s.toggleOn]}><View style={[s.toggleThumb, itemLess && s.toggleThumbOn]} /></View>
           </Pressable>
-          {saving ? <ActivityIndicator color={colors.gold} /> : <Button label="Add item" onPress={handleAddItem} disabled={!itemName.trim()} style={{ marginTop: 8 }} />}
+          {saving ? <ActivityIndicator color={colors.gold} /> : <Button title="Add item" onPress={handleAddItem} disabled={!itemName.trim()} style={{ marginTop: 8 }} />}
         </Sheet>
       )}
     </ScrollView>

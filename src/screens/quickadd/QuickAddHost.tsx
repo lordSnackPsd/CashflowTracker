@@ -284,7 +284,7 @@ export function QuickAddHost() {
           <EmojiPicker value={newCatEmoji} onChange={setNewCatEmoji} />
         </View>
         <Button
-          label="Create category"
+          title="Create category"
           onPress={handleCreateCategory}
           disabled={!newCatName.trim() || saving}
           style={s.btn}
@@ -353,7 +353,7 @@ export function QuickAddHost() {
         </Pressable>
 
         <Button
-          label="Add item"
+          title="Add item"
           onPress={handleCreateItem}
           disabled={!newItemCategoryId || saving}
           style={s.btn}
@@ -526,7 +526,7 @@ export function QuickAddHost() {
           ? <ActivityIndicator color={colors.gold} />
           : (
             <Button
-              label={`Log ${amountNum > 0 ? `${money(amountNum)} ${currency}` : ''}`}
+              title={`Log ${amountNum > 0 ? `${money(amountNum)} ${currency}` : ''}`}
               onPress={handleSubmit}
               disabled={!canSubmit}
               style={s.btn}

@@ -112,7 +112,7 @@ export function ClientDetailScreen() {
           <Field label="Name"><Input value={name} onChangeText={setName} autoFocus /></Field>
           <Field label="Email"><Input value={email} onChangeText={setEmail} keyboardType="email-address" /></Field>
           <Field label="Phone"><Input value={phone} onChangeText={setPhone} keyboardType="phone-pad" /></Field>
-          {saving ? <ActivityIndicator color={colors.gold} /> : <Button label="Save" onPress={handleSave} style={{ marginTop: 8 }} />}
+          {saving ? <ActivityIndicator color={colors.gold} /> : <Button title="Save" onPress={handleSave} style={{ marginTop: 8 }} />}
         </Sheet>
       )}
     </ScrollView>

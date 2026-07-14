@@ -31,7 +31,7 @@ export function Sheet({ title, onClose, children }: SheetProps) {
     >
       <KeyboardAvoidingView
         style={styles.root}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
       >
         <Pressable style={styles.overlay} onPress={onClose} />
         <View style={styles.panel}>

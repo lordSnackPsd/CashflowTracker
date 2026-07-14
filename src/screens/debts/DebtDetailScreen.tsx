@@ -21,7 +21,7 @@ import {
   calcRevolvingCreditPayment,
   suggestTermLoanPaymentFields,
 } from '../../logic/debtMath';
-import { ProgressBar, Gauge, Sheet, Button, Field, Input, TxRow, useToast } from '../../theme/components';
+import { ProgressBar, Gauge, Sheet, Button, Field, Input, TxRow, Select, useToast } from '../../theme/components';
 import { colors, money, radii, spacing, typeScale } from '../../theme/tokens';
 import type { RootStackParamList } from '../../navigation/types';
 import { todayIso } from '../../db/client';
@@ -292,7 +292,9 @@ export function DebtDetailScreen() {
           </View>
         </View>
 
-        <ProgressBar progress={progress} style={s.bar} />
+        <View style={s.bar}>
+          <ProgressBar value={progress} />
+        </View>
 
         <View style={s.statRow}>
           <View style={s.stat}>
@@ -310,7 +312,7 @@ export function DebtDetailScreen() {
         </View>
 
         {!isPaid && (
-          <Button label="Log payment" onPress={() => setShowPaySheet(true)} style={s.payBtn} />
+          <Button title="Log payment" onPress={() => setShowPaySheet(true)} style={s.payBtn} />
         )}
 
         <Text style={s.histLabel}>Payment history</Text>
@@ -343,14 +345,19 @@ export function DebtDetailScreen() {
                 placeholder={suggestedFields.fee !== undefined && !pFee ? String(suggestedFields.fee) : '0'} />
             </Field>
             <Field label="Paid from account">
-              <Input value={pAccount} onChangeText={setPAccount} placeholder="Account ID or select below" />
+              <Select
+                title="Account"
+                value={pAccount}
+                options={[{ value: '', label: 'Select account' }, ...accountOptions]}
+                onChange={setPAccount}
+              />
             </Field>
             <Field label="Date">
               <Input value={pDate} onChangeText={setPDate} placeholder="YYYY-MM-DD" />
             </Field>
             {saving
               ? <ActivityIndicator color={colors.gold} />
-              : <Button label="Confirm payment" onPress={handleTermLoanPay} style={{ marginTop: 8 }} />}
+              : <Button title="Confirm payment" onPress={handleTermLoanPay} style={{ marginTop: 8 }} />}
           </Sheet>
         )}
       </ScrollView>
@@ -384,7 +391,9 @@ export function DebtDetailScreen() {
           <Text style={s.revLimit}>of {money(debt.creditLimit ?? 0)} limit</Text>
         </View>
 
-        <Gauge progress={gaugeVal} style={s.bar} />
+        <View style={s.bar}>
+          <Gauge value={gaugeVal} />
+        </View>
 
         <View style={s.statRow}>
           <View style={s.stat}>
@@ -393,7 +402,7 @@ export function DebtDetailScreen() {
           </View>
         </View>
 
-        <Button label="Log payment" onPress={() => setShowPaySheet(true)} style={s.payBtn} />
+        <Button title="Log payment" onPress={() => setShowPaySheet(true)} style={s.payBtn} />
 
         <Text style={s.histLabel}>History</Text>
         {allEvents.length === 0
@@ -437,7 +446,7 @@ export function DebtDetailScreen() {
             )}
             {saving
               ? <ActivityIndicator color={colors.gold} />
-              : <Button label="Confirm payment" onPress={handleRevolvingPay} style={{ marginTop: 8 }} />}
+              : <Button title="Confirm payment" onPress={handleRevolvingPay} style={{ marginTop: 8 }} />}
           </Sheet>
         )}
       </ScrollView>
@@ -475,10 +484,12 @@ export function DebtDetailScreen() {
         </View>
       </View>
 
-      <ProgressBar progress={flProgress} style={s.bar} />
+      <View style={s.bar}>
+        <ProgressBar value={flProgress} />
+      </View>
 
       {!isPaid && (
-        <Button label="Log payment" onPress={() => setShowPaySheet(true)} style={s.payBtn} />
+        <Button title="Log payment" onPress={() => setShowPaySheet(true)} style={s.payBtn} />
       )}
 
       <Text style={s.histLabel}>Payment history</Text>
@@ -505,7 +516,7 @@ export function DebtDetailScreen() {
           </Field>
           {saving
             ? <ActivityIndicator color={colors.gold} />
-            : <Button label="Confirm repayment" onPress={handleFriendLoanPay} style={{ marginTop: 8 }} />}
+            : <Button title="Confirm repayment" onPress={handleFriendLoanPay} style={{ marginTop: 8 }} />}
         </Sheet>
       )}
     </ScrollView>

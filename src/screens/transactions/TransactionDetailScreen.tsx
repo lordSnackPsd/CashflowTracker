@@ -133,7 +133,7 @@ export function TransactionDetailScreen() {
           <Field label="Note">
             <Input value={editNote} onChangeText={setEditNote} placeholder="Add a note…" autoFocus multiline />
           </Field>
-          {saving ? <ActivityIndicator color={colors.gold} /> : <Button label="Save" onPress={handleSaveNote} style={{ marginTop: 8 }} />}
+          {saving ? <ActivityIndicator color={colors.gold} /> : <Button title="Save" onPress={handleSaveNote} style={{ marginTop: 8 }} />}
         </Sheet>
       )}
     </ScrollView>
