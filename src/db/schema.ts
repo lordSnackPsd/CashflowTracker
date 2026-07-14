@@ -95,6 +95,7 @@ export const SCHEMA_STATEMENTS: string[] = [
     start_date TEXT,
     end_date TEXT,
     interest_rate REAL,
+    interest_type TEXT,
     status TEXT NOT NULL DEFAULT 'active',
     is_archived INTEGER NOT NULL DEFAULT 0,
     archived_at TEXT

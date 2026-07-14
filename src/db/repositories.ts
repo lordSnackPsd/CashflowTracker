@@ -127,6 +127,7 @@ function mapDebt(r: Row): Debt {
     startDate: strOrNull(r.start_date),
     endDate: strOrNull(r.end_date),
     interestRate: numOrNull(r.interest_rate),
+    interestType: (strOrNull(r.interest_type) as Debt['interestType']) ?? null,
     status: r.status as Debt['status'],
     isArchived: bool(r.is_archived),
     archivedAt: strOrNull(r.archived_at),
@@ -198,12 +199,21 @@ const BALANCE_SUM = `COALESCE(SUM(CASE
     ELSE -t.amount END), 0)`;
 
 async function computeRunningBalance(accountId: string): Promise<number> {
-  const res = await getDb().execute(
+  const resTx = await getDb().execute(
     `SELECT ${BALANCE_SUM} AS bal FROM transactions t
      WHERE t.account_id = ? AND t.is_archived = 0`,
     [accountId],
   );
-  return Number(res.rows[0]?.bal ?? 0);
+  const txBal = Number(resTx.rows[0]?.bal ?? 0);
+
+  const resCorr = await getDb().execute(
+    `SELECT COALESCE(SUM(diff), 0) AS corr_sum FROM balance_corrections
+     WHERE account_id = ?`,
+    [accountId],
+  );
+  const corrSum = Number(resCorr.rows[0]?.corr_sum ?? 0);
+
+  return txBal - corrSum;
 }
 
 // ===== generic archive helpers =====
@@ -348,14 +358,18 @@ export interface Repositories {
 const accounts: AccountsRepo = {
   async list(includeArchived = false) {
     const res = await getDb().execute(
-      `SELECT a.*, ${BALANCE_SUM} AS bal
+      `SELECT a.*,
+         (SELECT ${BALANCE_SUM} FROM transactions t WHERE t.account_id = a.id AND t.is_archived = 0) AS tx_bal,
+         (SELECT COALESCE(SUM(diff), 0) FROM balance_corrections c WHERE c.account_id = a.id) AS corr_sum
        FROM accounts a
-       LEFT JOIN transactions t ON t.account_id = a.id AND t.is_archived = 0
        ${includeArchived ? '' : 'WHERE a.is_archived = 0'}
-       GROUP BY a.id
        ORDER BY a.sort_order ASC, a.created_at ASC`,
     );
-    return res.rows.map(r => mapAccount(r, Number(r.bal ?? 0)));
+    return res.rows.map(r => {
+      const txBal = Number(r.tx_bal ?? 0);
+      const corrSum = Number(r.corr_sum ?? 0);
+      return mapAccount(r, txBal - corrSum);
+    });
   },
 
   async get(id) {
@@ -736,12 +750,13 @@ const debts: DebtsRepo = {
     await getDb().execute(
       `INSERT INTO debts (id, name, debt_type, linked_account_id, counterparty, principal_disbursed,
         credit_limit, available_balance, total_interest_paid, total_owed, monthly_amount, due_date,
-        sort_order, start_date, end_date, interest_rate, status, is_archived, archived_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)`,
+        sort_order, start_date, end_date, interest_rate, interest_type, status, is_archived, archived_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)`,
       [id, input.name, input.debtType, input.linkedAccountId, input.counterparty,
        input.principalDisbursed, input.creditLimit, input.availableBalance,
        input.totalInterestPaid, input.totalOwed, input.monthlyAmount, input.dueDate,
-       input.sortOrder, input.startDate, input.endDate ?? null, input.interestRate ?? null, input.status],
+       input.sortOrder, input.startDate, input.endDate ?? null, input.interestRate ?? null,
+       input.interestType ?? null, input.status],
     );
     return (await debts.get(id))!;
   },
@@ -754,7 +769,7 @@ const debts: DebtsRepo = {
       totalInterestPaid: 'total_interest_paid', totalOwed: 'total_owed',
       monthlyAmount: 'monthly_amount', dueDate: 'due_date', sortOrder: 'sort_order',
       startDate: 'start_date', endDate: 'end_date', interestRate: 'interest_rate',
-      status: 'status',
+      interestType: 'interest_type', status: 'status',
     };
     const sets: string[] = [];
     const params: unknown[] = [];

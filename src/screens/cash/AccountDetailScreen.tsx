@@ -233,6 +233,7 @@ export function AccountDetailScreen() {
         startDate: todayIso(),
         endDate: null,
         interestRate: null,
+        interestType: null,
         status: 'active',
       });
 

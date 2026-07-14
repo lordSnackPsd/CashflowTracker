@@ -50,6 +50,8 @@ export function LoansScreen() {
   const [editStartDate, setEditStartDate] = useState('');
   const [editEndDate, setEditEndDate] = useState('');
   const [editInterestRate, setEditInterestRate] = useState('');
+  const [editInterestType, setEditInterestType] = useState<'fixed' | 'variable'>('fixed');
+  const [editNextDueDate, setEditNextDueDate] = useState('');
   const [editSaving, setEditSaving] = useState(false);
 
   // add form
@@ -68,6 +70,8 @@ export function LoansScreen() {
   const [addStartDate, setAddStartDate] = useState(todayIso());
   const [addEndDate, setAddEndDate] = useState('');
   const [addInterestRate, setAddInterestRate] = useState('');
+  const [addInterestType, setAddInterestType] = useState<'fixed' | 'variable'>('fixed');
+  const [addNextDueDate, setAddNextDueDate] = useState('');
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -94,6 +98,8 @@ export function LoansScreen() {
     setEditStartDate(debt.startDate ?? '');
     setEditEndDate(debt.endDate ?? '');
     setEditInterestRate(debt.interestRate != null ? String(debt.interestRate) : '');
+    setEditInterestType(debt.interestType ?? 'fixed');
+    setEditNextDueDate(debt.dueDate ?? '');
   };
 
   const handleEdit = useCallback(async () => {
@@ -106,13 +112,15 @@ export function LoansScreen() {
         startDate: editStartDate || null,
         endDate: editEndDate || null,
         interestRate: parseFloat(editInterestRate) || null,
+        interestType: editInterestType,
+        dueDate: editNextDueDate || null,
       });
       bumpData();
       setEditDebt(null);
     } finally {
       setEditSaving(false);
     }
-  }, [editDebt, editName, editMonthly, editStartDate, editEndDate, editInterestRate, bumpData]);
+  }, [editDebt, editName, editMonthly, editStartDate, editEndDate, editInterestRate, editInterestType, editNextDueDate, bumpData]);
 
   const handleAdd = useCallback(async () => {
     if (!addName.trim()) return;
@@ -129,11 +137,12 @@ export function LoansScreen() {
         totalInterestPaid: addType === 'revolving_credit' ? 0 : null,
         totalOwed: addType === 'friend_loan' ? parseFloat(addTotalOwed) || null : null,
         monthlyAmount: parseFloat(addMonthly) || null,
-        dueDate: null,
+        dueDate: addType === 'term_loan' ? (addNextDueDate || null) : null,
         sortOrder: addType === 'revolving_credit' ? 999 : null,
         startDate: addType === 'term_loan' ? (addStartDate || todayIso()) : todayIso(),
         endDate: addType === 'term_loan' ? (addEndDate || null) : null,
         interestRate: addType === 'term_loan' ? (parseFloat(addInterestRate) || null) : null,
+        interestType: addType === 'term_loan' ? addInterestType : null,
         status: 'active' as const,
       };
       const debt = await repos.debts.create(base);
@@ -212,13 +221,15 @@ export function LoansScreen() {
       setAddStartDate(todayIso());
       setAddEndDate('');
       setAddInterestRate('');
+      setAddInterestType('fixed');
+      setAddNextDueDate('');
     } finally {
       setSaving(false);
     }
   }, [
     addName, addType, addLinkedAccount, addCounterparty, addPrincipal,
     addCreditLimit, addAvailable, addTotalOwed, addMonthly, addPrincipalPaid,
-    addInterestPaid, addIsNew, addStartDate, addEndDate, addInterestRate, bumpData,
+    addInterestPaid, addIsNew, addStartDate, addEndDate, addInterestRate, addInterestType, addNextDueDate, bumpData,
   ]);
 
   const accountOptions = accounts.map(a => ({ value: a.id, label: a.name }));
@@ -321,23 +332,31 @@ export function LoansScreen() {
       {/* Edit debt sheet */}
       {editDebt && (
         <Sheet title="Edit loan" onClose={() => setEditDebt(null)}>
-          <Field label="Name">
+          <Field label="Credit label">
             <Input value={editName} onChangeText={setEditName} autoFocus />
           </Field>
-          <Field label="Monthly amount (informational)">
+          <Field label="Monthly instalment (next due amount)">
             <Input value={editMonthly} onChangeText={setEditMonthly} keyboardType="decimal-pad" placeholder="0" />
           </Field>
           {editDebt.debtType === 'term_loan' && (
             <>
-              <Field label="Start date">
+              <Field label="Credit start date">
                 <DatePickerField value={editStartDate} onChange={setEditStartDate} placeholder="Pick start date" />
               </Field>
-              <Field label="End date (final payment date)">
+              <Field label="Credit end date (last due date)">
                 <DatePickerField value={editEndDate} onChange={setEditEndDate} placeholder="Pick end date" />
               </Field>
-              <Field label="Annual interest rate (%)">
-                <Input value={editInterestRate} onChangeText={setEditInterestRate} keyboardType="decimal-pad" placeholder="e.g. 8.5" />
+              <Field label="Next due date">
+                <DatePickerField value={editNextDueDate} onChange={setEditNextDueDate} placeholder="Pick next due date" />
               </Field>
+              <Field label="Interest rate (%)">
+                <Input value={editInterestRate} onChangeText={setEditInterestRate} keyboardType="decimal-pad" placeholder="e.g. 12.25" />
+              </Field>
+              <Text style={s.typeLabel}>Interest type</Text>
+              <View style={s.typeRow}>
+                <Chip active={editInterestType === 'fixed'} onPress={() => setEditInterestType('fixed')}>Fixed (fixe)</Chip>
+                <Chip active={editInterestType === 'variable'} onPress={() => setEditInterestType('variable')}>Variable</Chip>
+              </View>
             </>
           )}
           {editSaving
@@ -369,19 +388,36 @@ export function LoansScreen() {
 
           {addType === 'term_loan' && (
             <>
-              <Field label="Principal amount (total disbursed)">
+              <Field label="Credit amount (principal disbursed)">
                 <Input value={addPrincipal} onChangeText={setAddPrincipal} keyboardType="decimal-pad" placeholder="0" />
               </Field>
-              <Field label="Start date">
+              <Field label="Credit term (months)">
+                <Input
+                  value={addEndDate && addStartDate
+                    ? String(Math.max(0, Math.round((new Date(addEndDate).getTime() - new Date(addStartDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44))))
+                    : ''}
+                  editable={false}
+                  placeholder="Auto-calculated from dates"
+                />
+              </Field>
+              <Field label="Credit start date">
                 <DatePickerField value={addStartDate} onChange={setAddStartDate} />
               </Field>
-              <Field label="End date (final payment date)">
+              <Field label="Credit end date (last due date)">
                 <DatePickerField value={addEndDate} onChange={setAddEndDate} placeholder="Pick end date" />
               </Field>
-              <Field label="Annual interest rate (%)">
-                <Input value={addInterestRate} onChangeText={setAddInterestRate} keyboardType="decimal-pad" placeholder="e.g. 8.5" />
+              <Field label="Next due date">
+                <DatePickerField value={addNextDueDate} onChange={setAddNextDueDate} placeholder="Pick next due date" />
               </Field>
-              <Field label="Monthly instalment">
+              <Field label="Interest rate (%)">
+                <Input value={addInterestRate} onChangeText={setAddInterestRate} keyboardType="decimal-pad" placeholder="e.g. 12.25" />
+              </Field>
+              <Text style={s.typeLabel}>Interest type</Text>
+              <View style={s.typeRow}>
+                <Chip active={addInterestType === 'fixed'} onPress={() => setAddInterestType('fixed')}>Fixed (fixe)</Chip>
+                <Chip active={addInterestType === 'variable'} onPress={() => setAddInterestType('variable')}>Variable</Chip>
+              </View>
+              <Field label="Monthly instalment (next due amount)">
                 <Input value={addMonthly} onChangeText={setAddMonthly} keyboardType="decimal-pad" placeholder="0" />
               </Field>
               <Field label="Principal already paid (optional)">

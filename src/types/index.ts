@@ -97,6 +97,7 @@ export interface Debt {
   startDate: string | null;
   endDate: string | null;             // term_loan — expected payoff date
   interestRate: number | null;        // term_loan — annual interest rate %
+  interestType: 'fixed' | 'variable' | null; // term_loan — fixe/variable
   status: DebtStatus;
   isArchived: boolean;
   archivedAt: string | null;

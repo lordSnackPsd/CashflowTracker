@@ -87,6 +87,8 @@ export function DebtDetailScreen() {
   const [editStartDate, setEditStartDate] = useState('');
   const [editEndDate, setEditEndDate] = useState('');
   const [editInterestRate, setEditInterestRate] = useState('');
+  const [editInterestType, setEditInterestType] = useState<'fixed' | 'variable'>('fixed');
+  const [editNextDueDate, setEditNextDueDate] = useState('');
   const [editSaving, setEditSaving] = useState(false);
 
   const currency = settings?.currency ?? 'TND';
@@ -111,6 +113,8 @@ export function DebtDetailScreen() {
       setEditStartDate(d.startDate ?? '');
       setEditEndDate(d.endDate ?? '');
       setEditInterestRate(d.interestRate != null ? String(d.interestRate) : '');
+      setEditInterestType(d.interestType ?? 'fixed');
+      setEditNextDueDate(d.dueDate ?? '');
     }
   }, [debtId]);
 
@@ -146,6 +150,8 @@ export function DebtDetailScreen() {
         startDate: editStartDate || null,
         endDate: editEndDate || null,
         interestRate: parseFloat(editInterestRate) || null,
+        interestType: editInterestType,
+        dueDate: editNextDueDate || null,
       });
       bumpData();
       setShowEditSheet(false);
@@ -153,7 +159,7 @@ export function DebtDetailScreen() {
     } finally {
       setEditSaving(false);
     }
-  }, [debt, editName, editMonthly, editStartDate, editEndDate, editInterestRate, bumpData, toast]);
+  }, [debt, editName, editMonthly, editStartDate, editEndDate, editInterestRate, editInterestType, editNextDueDate, bumpData, toast]);
 
   const handleTermLoanPay = useCallback(async () => {
     if (!debt) return;
@@ -382,22 +388,41 @@ export function DebtDetailScreen() {
   // ---- Edit sheet (shared across all debt types) ----
   const editSheet = showEditSheet && (
     <Sheet title="Edit loan" onClose={() => setShowEditSheet(false)}>
-      <Field label="Name">
+      <Field label="Credit label">
         <Input value={editName} onChangeText={setEditName} autoFocus />
       </Field>
-      <Field label="Monthly amount (informational)">
+      <Field label="Monthly instalment (next due amount)">
         <Input value={editMonthly} onChangeText={setEditMonthly} keyboardType="decimal-pad" placeholder="0" />
       </Field>
       {debt.debtType === 'term_loan' && (
         <>
-          <Field label="Start date">
+          <Field label="Credit start date">
             <DatePickerField value={editStartDate} onChange={setEditStartDate} placeholder="Pick start date" />
           </Field>
-          <Field label="End date (final payment date)">
+          <Field label="Credit end date (last due date)">
             <DatePickerField value={editEndDate} onChange={setEditEndDate} placeholder="Pick end date" />
           </Field>
-          <Field label="Annual interest rate (%)">
-            <Input value={editInterestRate} onChangeText={setEditInterestRate} keyboardType="decimal-pad" placeholder="e.g. 8.5" />
+          <Field label="Next due date">
+            <DatePickerField value={editNextDueDate} onChange={setEditNextDueDate} placeholder="Pick next due date" />
+          </Field>
+          <Field label="Interest rate (%)">
+            <Input value={editInterestRate} onChangeText={setEditInterestRate} keyboardType="decimal-pad" placeholder="e.g. 12.25" />
+          </Field>
+          <Field label="Interest type">
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                onPress={() => setEditInterestType('fixed')}
+                style={[es.chip, editInterestType === 'fixed' && es.chipActive]}
+              >
+                <Text style={[es.chipText, editInterestType === 'fixed' && es.chipTextActive]}>Fixed (fixe)</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setEditInterestType('variable')}
+                style={[es.chip, editInterestType === 'variable' && es.chipActive]}
+              >
+                <Text style={[es.chipText, editInterestType === 'variable' && es.chipTextActive]}>Variable</Text>
+              </Pressable>
+            </View>
           </Field>
         </>
       )}
@@ -437,31 +462,51 @@ export function DebtDetailScreen() {
 
         {isPaid && <Text style={s.paidBadge}>PAID OFF</Text>}
 
-        {/* Key loan facts */}
-        {(debt.startDate || debt.endDate || debt.interestRate) && (
+        {/* Credit details strip — matches bank layout */}
+        {(debt.startDate || debt.endDate || debt.interestRate || debt.interestType || debt.dueDate) && (
           <View style={s.loanFactsBox}>
             {debt.interestRate && (
               <View style={s.loanFact}>
                 <Text style={s.loanFactLabel}>Interest rate</Text>
-                <Text style={s.loanFactValue}>{debt.interestRate}% / yr</Text>
+                <Text style={s.loanFactValue}>{debt.interestRate}%</Text>
+              </View>
+            )}
+            {debt.interestType && (
+              <View style={s.loanFact}>
+                <Text style={s.loanFactLabel}>Interest type</Text>
+                <Text style={s.loanFactValue}>{debt.interestType === 'fixed' ? 'Fixe' : 'Variable'}</Text>
               </View>
             )}
             {debt.startDate && (
               <View style={s.loanFact}>
-                <Text style={s.loanFactLabel}>Start date</Text>
+                <Text style={s.loanFactLabel}>Credit start</Text>
                 <Text style={s.loanFactValue}>{debt.startDate}</Text>
               </View>
             )}
             {debt.endDate && (
               <View style={s.loanFact}>
-                <Text style={s.loanFactLabel}>End date</Text>
+                <Text style={s.loanFactLabel}>Last due date</Text>
                 <Text style={s.loanFactValue}>{debt.endDate}</Text>
+              </View>
+            )}
+            {debt.startDate && debt.endDate && (
+              <View style={s.loanFact}>
+                <Text style={s.loanFactLabel}>Credit term</Text>
+                <Text style={s.loanFactValue}>
+                  {Math.max(0, Math.round((new Date(debt.endDate).getTime() - new Date(debt.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44)))} months
+                </Text>
+              </View>
+            )}
+            {debt.dueDate && (
+              <View style={s.loanFact}>
+                <Text style={s.loanFactLabel}>Next due date</Text>
+                <Text style={[s.loanFactValue, { color: colors.gold }]}>{debt.dueDate}</Text>
               </View>
             )}
             {debt.monthlyAmount && (
               <View style={s.loanFact}>
-                <Text style={s.loanFactLabel}>Monthly</Text>
-                <Text style={s.loanFactValue}>{money(debt.monthlyAmount)} {currency}</Text>
+                <Text style={s.loanFactLabel}>Next due amount</Text>
+                <Text style={[s.loanFactValue, { color: colors.gold }]}>{money(debt.monthlyAmount)} {currency}</Text>
               </View>
             )}
           </View>
@@ -816,4 +861,22 @@ const s = StyleSheet.create({
     borderColor: colors.border,
   },
   calcLine: { fontSize: typeScale.md, color: colors.dim, marginBottom: 2 },
+});
+
+// Small inline styles for interest-type chips inside the edit sheet
+const es = StyleSheet.create({
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface2,
+  },
+  chipActive: {
+    borderColor: colors.gold,
+    backgroundColor: 'rgba(216, 167, 61, 0.12)',
+  },
+  chipText: { fontSize: typeScale.md, color: colors.dim },
+  chipTextActive: { color: colors.gold, fontWeight: '600' },
 });

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Solid background color matching app theme bg: #0B0D11 -->
+    <item>
+        <color android:color="#0B0D11"/>
+    </item>
+    
+    <!-- App logo centered -->
+    <item
+        android:drawable="@mipmap/ic_launcher"
+        android:gravity="center"
+        android:width="128dp"
+        android:height="128dp" />
+</layer-list>

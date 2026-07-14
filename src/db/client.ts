@@ -42,6 +42,7 @@ export async function initDb(): Promise<void> {
   const migrations = [
     `ALTER TABLE debts ADD COLUMN end_date TEXT`,
     `ALTER TABLE debts ADD COLUMN interest_rate REAL`,
+    `ALTER TABLE debts ADD COLUMN interest_type TEXT`,
   ];
   for (const m of migrations) {
     try { await database.execute(m); } catch (_) { /* column already exists */ }
