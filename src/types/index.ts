@@ -95,6 +95,8 @@ export interface Debt {
   dueDate: string | null;             // informational only, any type
   sortOrder: number | null;           // revolving_credit only — shares accounts.sortOrder pool
   startDate: string | null;
+  endDate: string | null;             // term_loan — expected payoff date
+  interestRate: number | null;        // term_loan — annual interest rate %
   status: DebtStatus;
   isArchived: boolean;
   archivedAt: string | null;

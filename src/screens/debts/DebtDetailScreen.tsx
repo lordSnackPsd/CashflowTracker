@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ChevronLeft, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, Pencil, Trash2 } from 'lucide-react-native';
 import type { Account, Debt, LoanPayment, Transaction } from '../../types';
 import { repos } from '../../db/repositories';
 import { useApp } from '../../context/AppContext';
@@ -21,13 +21,32 @@ import {
   calcRevolvingCreditPayment,
   suggestTermLoanPaymentFields,
 } from '../../logic/debtMath';
-import { ProgressBar, Gauge, Sheet, Button, Field, Input, TxRow, Select, useToast } from '../../theme/components';
+import {
+  ProgressBar, Gauge, Sheet, Button, Field, Input, Select, DatePickerField, useToast,
+} from '../../theme/components';
 import { colors, money, radii, spacing, typeScale } from '../../theme/tokens';
 import type { RootStackParamList } from '../../navigation/types';
 import { todayIso } from '../../db/client';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'DebtDetail'>;
 type Route = RouteProp<RootStackParamList, 'DebtDetail'>;
+
+/** Returns months between two ISO date strings. Positive = future. */
+function monthsBetween(from: string, to: string): number {
+  const f = new Date(from);
+  const t = new Date(to);
+  return (t.getFullYear() - f.getFullYear()) * 12 + (t.getMonth() - f.getMonth());
+}
+
+function formatTimeRemaining(endDate: string): string {
+  const today = todayIso();
+  const months = monthsBetween(today, endDate);
+  if (months < 0) return 'OVERDUE';
+  if (months === 0) return 'Final month';
+  const years = months / 12;
+  if (months < 12) return `${months} month${months !== 1 ? 's' : ''} remaining`;
+  return `${months} months (~${years.toFixed(1)} yrs) remaining`;
+}
 
 export function DebtDetailScreen() {
   const navigation = useNavigation<Nav>();
@@ -41,6 +60,7 @@ export function DebtDetailScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showPaySheet, setShowPaySheet] = useState(false);
+  const [showEditSheet, setShowEditSheet] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // term loan payment fields
@@ -61,6 +81,14 @@ export function DebtDetailScreen() {
   const [flDate, setFlDate] = useState(todayIso());
   const [flAccount, setFlAccount] = useState('');
 
+  // edit fields
+  const [editName, setEditName] = useState('');
+  const [editMonthly, setEditMonthly] = useState('');
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editEndDate, setEditEndDate] = useState('');
+  const [editInterestRate, setEditInterestRate] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
   const currency = settings?.currency ?? 'TND';
 
   const load = useCallback(async () => {
@@ -77,6 +105,12 @@ export function DebtDetailScreen() {
       ]);
       setPayments(pmts);
       setTransactions(txs.filter(t => !t.isArchived));
+      // Pre-fill edit fields
+      setEditName(d.name);
+      setEditMonthly(d.monthlyAmount != null ? String(d.monthlyAmount) : '');
+      setEditStartDate(d.startDate ?? '');
+      setEditEndDate(d.endDate ?? '');
+      setEditInterestRate(d.interestRate != null ? String(d.interestRate) : '');
     }
   }, [debtId]);
 
@@ -102,6 +136,25 @@ export function DebtDetailScreen() {
     navigation.goBack();
   }, [debt, bumpData, navigation]);
 
+  const handleEdit = useCallback(async () => {
+    if (!debt || !editName.trim()) return;
+    setEditSaving(true);
+    try {
+      await repos.debts.update(debt.id, {
+        name: editName.trim(),
+        monthlyAmount: parseFloat(editMonthly) || null,
+        startDate: editStartDate || null,
+        endDate: editEndDate || null,
+        interestRate: parseFloat(editInterestRate) || null,
+      });
+      bumpData();
+      setShowEditSheet(false);
+      toast.show('Loan updated');
+    } finally {
+      setEditSaving(false);
+    }
+  }, [debt, editName, editMonthly, editStartDate, editEndDate, editInterestRate, bumpData, toast]);
+
   const handleTermLoanPay = useCallback(async () => {
     if (!debt) return;
     const total = parseFloat(pTotal) || (suggestedFields.total ?? 0);
@@ -111,12 +164,23 @@ export function DebtDetailScreen() {
     if (!total || !pAccount) return;
     setSaving(true);
     try {
+      const cats = await repos.categories.list(true);
+      let loanCat = cats.find(c => c.name.toLowerCase() === 'loans');
+      if (!loanCat) {
+        loanCat = await repos.categories.create({
+          name: 'Loans',
+          emoji: '💰',
+          monthlyBudget: null,
+          lessSpendGoal: false,
+        });
+      }
+
       const tx = await repos.transactions.create({
         accountId: pAccount,
         type: 'expense',
         amount: total,
         date: pDate,
-        categoryId: null,
+        categoryId: loanCat.id,
         itemId: null,
         paymentMethodNote: `Loan payment: ${debt.name}`,
         counterparty: null,
@@ -127,6 +191,7 @@ export function DebtDetailScreen() {
         source: 'detailed',
         note: null,
       });
+
       await repos.loanPayments.create({
         debtId: debt.id,
         date: pDate,
@@ -136,7 +201,7 @@ export function DebtDetailScreen() {
         feeAmount: fee,
         sourceTransactionRef: tx.id,
       });
-      // check if fully paid
+
       const newRemaining = calcTermLoanRemaining(debt.principalDisbursed ?? 0, [
         ...payments,
         { id: '', debtId: debt.id, date: pDate, totalAmount: total, principalAmount: principal, interestAmount: interest, feeAmount: fee, sourceTransactionRef: tx.id },
@@ -164,14 +229,40 @@ export function DebtDetailScreen() {
         totalAmount: total,
         newAvailableAmount: newAvail,
       });
+
+      const cats = await repos.categories.list(true);
+      let loanCat = cats.find(c => c.name.toLowerCase() === 'loans');
+      if (!loanCat) {
+        loanCat = await repos.categories.create({
+          name: 'Loans',
+          emoji: '💰',
+          monthlyBudget: null,
+          lessSpendGoal: false,
+        });
+      }
+
+      let bankFeeCatId: string | null = null;
+      if (result.interestAmount > 0) {
+        let bankFeeCat = cats.find(c => c.name.toLowerCase() === 'bank account fees');
+        if (!bankFeeCat) {
+          bankFeeCat = await repos.categories.create({
+            name: 'Bank account fees',
+            emoji: '🏦',
+            monthlyBudget: null,
+            lessSpendGoal: false,
+          });
+        }
+        bankFeeCatId = bankFeeCat.id;
+      }
+
       const tx = await repos.transactions.create({
         accountId: rvAccount,
         type: 'expense',
-        amount: total,
+        amount: result.principalAmount,
         date: todayIso(),
-        categoryId: null,
+        categoryId: loanCat.id,
         itemId: null,
-        paymentMethodNote: `Card payment: ${debt.name}`,
+        paymentMethodNote: `Card payment (Principal): ${debt.name}`,
         counterparty: null,
         clientId: null,
         transferKind: null,
@@ -180,6 +271,26 @@ export function DebtDetailScreen() {
         source: 'detailed',
         note: null,
       });
+
+      if (result.interestAmount > 0) {
+        await repos.transactions.create({
+          accountId: rvAccount,
+          type: 'expense',
+          amount: result.interestAmount,
+          date: todayIso(),
+          categoryId: bankFeeCatId,
+          itemId: null,
+          paymentMethodNote: `Card payment (Interest): ${debt.name}`,
+          counterparty: null,
+          clientId: null,
+          transferKind: null,
+          feeAmount: null,
+          linkedTransactionId: null,
+          source: 'detailed',
+          note: null,
+        });
+      }
+
       await repos.loanPayments.create({
         debtId: debt.id,
         date: todayIso(),
@@ -207,12 +318,23 @@ export function DebtDetailScreen() {
     if (!amount || !flAccount) return;
     setSaving(true);
     try {
+      const cats = await repos.categories.list(true);
+      let loanCat = cats.find(c => c.name.toLowerCase() === 'loans');
+      if (!loanCat) {
+        loanCat = await repos.categories.create({
+          name: 'Loans',
+          emoji: '💰',
+          monthlyBudget: null,
+          lessSpendGoal: false,
+        });
+      }
+
       const tx = await repos.transactions.create({
         accountId: flAccount,
         type: 'expense',
         amount,
         date: flDate,
-        categoryId: null,
+        categoryId: loanCat.id,
         itemId: null,
         paymentMethodNote: `Repayment: ${debt.name}`,
         counterparty: debt.counterparty,
@@ -257,6 +379,34 @@ export function DebtDetailScreen() {
 
   const isPaid = debt.status === 'paid';
 
+  // ---- Edit sheet (shared across all debt types) ----
+  const editSheet = showEditSheet && (
+    <Sheet title="Edit loan" onClose={() => setShowEditSheet(false)}>
+      <Field label="Name">
+        <Input value={editName} onChangeText={setEditName} autoFocus />
+      </Field>
+      <Field label="Monthly amount (informational)">
+        <Input value={editMonthly} onChangeText={setEditMonthly} keyboardType="decimal-pad" placeholder="0" />
+      </Field>
+      {debt.debtType === 'term_loan' && (
+        <>
+          <Field label="Start date">
+            <DatePickerField value={editStartDate} onChange={setEditStartDate} placeholder="Pick start date" />
+          </Field>
+          <Field label="End date (final payment date)">
+            <DatePickerField value={editEndDate} onChange={setEditEndDate} placeholder="Pick end date" />
+          </Field>
+          <Field label="Annual interest rate (%)">
+            <Input value={editInterestRate} onChangeText={setEditInterestRate} keyboardType="decimal-pad" placeholder="e.g. 8.5" />
+          </Field>
+        </>
+      )}
+      {editSaving
+        ? <ActivityIndicator color={colors.gold} style={{ marginTop: 12 }} />
+        : <Button title="Save" onPress={handleEdit} disabled={!editName.trim()} style={{ marginTop: 8 }} />}
+    </Sheet>
+  );
+
   // ---- render by type ----
 
   if (debt.debtType === 'term_loan') {
@@ -266,6 +416,7 @@ export function DebtDetailScreen() {
     const interestPaid = payments.reduce((s, p) => s + p.interestAmount, 0);
     const feesPaid = payments.reduce((s, p) => s + p.feeAmount, 0);
     const realCost = payments.reduce((s, p) => s + p.totalAmount, 0);
+    const timeRemaining = debt.endDate ? formatTimeRemaining(debt.endDate) : null;
 
     return (
       <ScrollView style={s.root} contentContainerStyle={s.content}>
@@ -274,12 +425,47 @@ export function DebtDetailScreen() {
             <ChevronLeft size={20} color={colors.dim} />
           </Pressable>
           <Text style={s.title} numberOfLines={1}>{debt.name}</Text>
-          <Pressable onPress={handleArchive} hitSlop={8}>
-            <Trash2 size={18} color={colors.faint} />
-          </Pressable>
+          <View style={s.headerActions}>
+            <Pressable onPress={() => setShowEditSheet(true)} hitSlop={8} style={{ marginRight: 12 }}>
+              <Pencil size={18} color={colors.gold} />
+            </Pressable>
+            <Pressable onPress={handleArchive} hitSlop={8}>
+              <Trash2 size={18} color={colors.faint} />
+            </Pressable>
+          </View>
         </View>
 
         {isPaid && <Text style={s.paidBadge}>PAID OFF</Text>}
+
+        {/* Key loan facts */}
+        {(debt.startDate || debt.endDate || debt.interestRate) && (
+          <View style={s.loanFactsBox}>
+            {debt.interestRate && (
+              <View style={s.loanFact}>
+                <Text style={s.loanFactLabel}>Interest rate</Text>
+                <Text style={s.loanFactValue}>{debt.interestRate}% / yr</Text>
+              </View>
+            )}
+            {debt.startDate && (
+              <View style={s.loanFact}>
+                <Text style={s.loanFactLabel}>Start date</Text>
+                <Text style={s.loanFactValue}>{debt.startDate}</Text>
+              </View>
+            )}
+            {debt.endDate && (
+              <View style={s.loanFact}>
+                <Text style={s.loanFactLabel}>End date</Text>
+                <Text style={s.loanFactValue}>{debt.endDate}</Text>
+              </View>
+            )}
+            {debt.monthlyAmount && (
+              <View style={s.loanFact}>
+                <Text style={s.loanFactLabel}>Monthly</Text>
+                <Text style={s.loanFactValue}>{money(debt.monthlyAmount)} {currency}</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         <View style={s.statRow}>
           <View style={s.stat}>
@@ -295,6 +481,15 @@ export function DebtDetailScreen() {
         <View style={s.bar}>
           <ProgressBar value={progress} />
         </View>
+
+        {/* Time remaining */}
+        {timeRemaining && (
+          <View style={[s.timeBox, timeRemaining === 'OVERDUE' && s.timeBoxOverdue]}>
+            <Text style={[s.timeText, timeRemaining === 'OVERDUE' && { color: colors.red }]}>
+              {timeRemaining}
+            </Text>
+          </View>
+        )}
 
         <View style={s.statRow}>
           <View style={s.stat}>
@@ -320,7 +515,12 @@ export function DebtDetailScreen() {
           ? <Text style={s.empty}>No payments logged yet.</Text>
           : payments.map(p => (
             <View key={p.id} style={s.payRow}>
-              <Text style={s.payDate}>{p.date}</Text>
+              <View>
+                <Text style={s.payDate}>{p.date}</Text>
+                <Text style={s.payMeta}>
+                  P:{money(p.principalAmount)} · I:{money(p.interestAmount)}{p.feeAmount > 0 ? ` · F:${money(p.feeAmount)}` : ''}
+                </Text>
+              </View>
               <Text style={s.payAmt}>{money(p.totalAmount)} {currency}</Text>
             </View>
           ))
@@ -345,21 +545,18 @@ export function DebtDetailScreen() {
                 placeholder={suggestedFields.fee !== undefined && !pFee ? String(suggestedFields.fee) : '0'} />
             </Field>
             <Field label="Paid from account">
-              <Select
-                title="Account"
-                value={pAccount}
-                options={[{ value: '', label: 'Select account' }, ...accountOptions]}
-                onChange={setPAccount}
-              />
+              <Select title="Account" value={pAccount} options={[{ value: '', label: 'Select account' }, ...accountOptions]} onChange={setPAccount} />
             </Field>
             <Field label="Date">
-              <Input value={pDate} onChangeText={setPDate} placeholder="YYYY-MM-DD" />
+              <DatePickerField value={pDate} onChange={setPDate} />
             </Field>
             {saving
               ? <ActivityIndicator color={colors.gold} />
               : <Button title="Confirm payment" onPress={handleTermLoanPay} style={{ marginTop: 8 }} />}
           </Sheet>
         )}
+
+        {editSheet}
       </ScrollView>
     );
   }
@@ -380,9 +577,14 @@ export function DebtDetailScreen() {
             <ChevronLeft size={20} color={colors.dim} />
           </Pressable>
           <Text style={s.title} numberOfLines={1}>{debt.name}</Text>
-          <Pressable onPress={handleArchive} hitSlop={8}>
-            <Trash2 size={18} color={colors.faint} />
-          </Pressable>
+          <View style={s.headerActions}>
+            <Pressable onPress={() => setShowEditSheet(true)} hitSlop={8} style={{ marginRight: 12 }}>
+              <Pencil size={18} color={colors.gold} />
+            </Pressable>
+            <Pressable onPress={handleArchive} hitSlop={8}>
+              <Trash2 size={18} color={colors.faint} />
+            </Pressable>
+          </View>
         </View>
 
         <View style={s.revHeader}>
@@ -432,7 +634,7 @@ export function DebtDetailScreen() {
               <Input value={rvNewAvail} onChangeText={setRvNewAvail} keyboardType="decimal-pad" placeholder="0" />
             </Field>
             <Field label="Deducted from account">
-              <Input value={rvAccount} onChangeText={setRvAccount} placeholder="Account ID" />
+              <Select title="Account" value={rvAccount} options={[{ value: '', label: 'Select account' }, ...accountOptions]} onChange={setRvAccount} />
             </Field>
             {rvTotal && rvNewAvail && (
               <View style={s.calcPreview}>
@@ -449,6 +651,8 @@ export function DebtDetailScreen() {
               : <Button title="Confirm payment" onPress={handleRevolvingPay} style={{ marginTop: 8 }} />}
           </Sheet>
         )}
+
+        {editSheet}
       </ScrollView>
     );
   }
@@ -465,9 +669,14 @@ export function DebtDetailScreen() {
           <ChevronLeft size={20} color={colors.dim} />
         </Pressable>
         <Text style={s.title} numberOfLines={1}>{debt.name}</Text>
-        <Pressable onPress={handleArchive} hitSlop={8}>
-          <Trash2 size={18} color={colors.faint} />
-        </Pressable>
+        <View style={s.headerActions}>
+          <Pressable onPress={() => setShowEditSheet(true)} hitSlop={8} style={{ marginRight: 12 }}>
+            <Pencil size={18} color={colors.gold} />
+          </Pressable>
+          <Pressable onPress={handleArchive} hitSlop={8}>
+            <Trash2 size={18} color={colors.faint} />
+          </Pressable>
+        </View>
       </View>
 
       {debt.counterparty && <Text style={s.counterparty}>With {debt.counterparty}</Text>}
@@ -509,16 +718,18 @@ export function DebtDetailScreen() {
             <Input value={flAmount} onChangeText={setFlAmount} keyboardType="decimal-pad" placeholder="0" autoFocus />
           </Field>
           <Field label="Date">
-            <Input value={flDate} onChangeText={setFlDate} placeholder="YYYY-MM-DD" />
+            <DatePickerField value={flDate} onChange={setFlDate} />
           </Field>
           <Field label="Paid from account">
-            <Input value={flAccount} onChangeText={setFlAccount} placeholder="Account ID" />
+            <Select title="Account" value={flAccount} options={[{ value: '', label: 'Select account' }, ...accountOptions]} onChange={setFlAccount} />
           </Field>
           {saving
             ? <ActivityIndicator color={colors.gold} />
             : <Button title="Confirm repayment" onPress={handleFriendLoanPay} style={{ marginTop: 8 }} />}
         </Sheet>
       )}
+
+      {editSheet}
     </ScrollView>
   );
 }
@@ -533,14 +744,47 @@ const s = StyleSheet.create({
     paddingTop: 24,
     marginBottom: 20,
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
   title: { fontSize: typeScale.xl, fontWeight: '600', color: colors.text, flex: 1, marginHorizontal: 12 },
   paidBadge: { fontSize: typeScale.sm, color: colors.green, fontWeight: '700', letterSpacing: 0.6, marginBottom: 12 },
   counterparty: { fontSize: typeScale.md, color: colors.dim, marginBottom: 12 },
+
+  // Loan facts strip
+  loanFactsBox: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    padding: 12,
+    marginBottom: 16,
+  },
+  loanFact: { minWidth: 80 },
+  loanFactLabel: { fontSize: typeScale.xs, color: colors.faint, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
+  loanFactValue: { fontSize: typeScale.md, color: colors.text, fontWeight: '500' },
+
   statRow: { flexDirection: 'row', gap: 16, marginBottom: 16 },
   stat: { flex: 1 },
   statLabel: { fontSize: typeScale.xs, color: colors.faint, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
   statValue: { fontSize: typeScale.xl, fontWeight: '600', color: colors.text },
-  bar: { marginBottom: 20 },
+  bar: { marginBottom: 12 },
+
+  // Time remaining
+  timeBox: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+    alignSelf: 'flex-start',
+  },
+  timeBoxOverdue: { borderColor: colors.red },
+  timeText: { fontSize: typeScale.md, color: colors.gold, fontWeight: '600' },
+
   payBtn: { marginBottom: 24 },
   histLabel: { fontSize: typeScale.sm, color: colors.faint, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 10 },
   payRow: {
@@ -552,6 +796,7 @@ const s = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   payDate: { fontSize: typeScale.sm, color: colors.faint },
+  payMeta: { fontSize: typeScale.xs, color: colors.faint, marginTop: 2 },
   payLabel: { fontSize: typeScale.md, color: colors.dim },
   payAmt: { fontSize: typeScale.lg, fontWeight: '500', color: colors.text },
   incomeText: { color: colors.green },

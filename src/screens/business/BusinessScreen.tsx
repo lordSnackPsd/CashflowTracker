@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,11 +11,13 @@ import { useNavigation } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Plus } from 'lucide-react-native';
+import { UserPlus } from 'lucide-react-native';
 import type { Client, ScheduledPayment, Transaction } from '../../types';
 import { repos } from '../../db/repositories';
 import { useApp } from '../../context/AppContext';
-import { Sheet, Button, Field, Input, Select, useToast } from '../../theme/components';
+import {
+  Sheet, Button, Field, Input, Select, Chip, DatePickerField, useToast,
+} from '../../theme/components';
 import { colors, money, radii, spacing, typeScale } from '../../theme/tokens';
 import type { TabParamList, RootStackParamList } from '../../navigation/types';
 import { todayIso } from '../../db/client';
@@ -80,6 +81,9 @@ export function BusinessScreen() {
 
   const top3 = clientTotals.slice(0, 3);
   const expectedIncome = scheduled.reduce((s, sp) => s + sp.remainingAmount, 0);
+  const receivedTotal = scheduled.reduce((s, sp) => s + sp.receivedSoFar, 0);
+  const grandTotal = expectedIncome + receivedTotal;
+  const receivedRatio = grandTotal > 0 ? receivedTotal / grandTotal : 0;
 
   const handleAddClient = useCallback(async () => {
     if (!addName.trim()) return;
@@ -102,33 +106,40 @@ export function BusinessScreen() {
   }, [addName, addEmail, addPhone, addContact, bumpData]);
 
   const handleLogPayment = useCallback(async () => {
-    const amount = parseFloat(lpAmount);
-    if (!amount || !lpClientId || !lpAccountId) return;
+    const amount = parseFloat(lpAmount) || 0;
+    if (!lpClientId) return;
     setSaving(true);
     try {
       const clientObj = clients.find(c => c.id === lpClientId);
       const clientName = clientObj ? clientObj.name : 'Client';
 
-      const tx = await repos.transactions.create({
-        accountId: lpAccountId,
-        type: 'income',
-        amount,
-        date: todayIso(),
-        categoryId: null,
-        itemId: null,
-        paymentMethodNote: null,
-        counterparty: null,
-        clientId: lpClientId,
-        transferKind: 'client',
-        feeAmount: null,
-        linkedTransactionId: null,
-        source: 'detailed',
-        note: null,
-      });
+      let txId: string | null = null;
+
+      // Only create an income transaction if amount > 0
+      if (amount > 0 && lpAccountId) {
+        const tx = await repos.transactions.create({
+          accountId: lpAccountId,
+          type: 'income',
+          amount,
+          date: todayIso(),
+          categoryId: null,
+          itemId: null,
+          paymentMethodNote: null,
+          counterparty: null,
+          clientId: lpClientId,
+          transferKind: 'client',
+          feeAmount: null,
+          linkedTransactionId: null,
+          source: 'detailed',
+          note: null,
+        });
+        txId = tx.id;
+      }
+
       if (lpIsAdvance) {
-        const total = parseFloat(lpTotalAgreed) || amount;
+        const total = parseFloat(lpTotalAgreed) || (amount > 0 ? amount : 0);
         let notifId: string | null = null;
-        if (lpDueDate) {
+        if (lpDueDate && (total - amount) > 0) {
           try {
             notifId = await schedulePaymentReminder(
               `sp-${lpClientId}-${Date.now()}`,
@@ -145,15 +156,16 @@ export function BusinessScreen() {
 
         await repos.scheduledPayments.create({
           clientId: lpClientId,
-          totalAmount: total,
+          totalAmount: total > 0 ? total : amount,
           receivedSoFar: amount,
           dueDate: lpDueDate || null,
           reminderTime: '11:00',
-          status: amount >= total ? 'completed' : 'partially_paid',
-          advanceTransactionId: tx.id,
+          status: amount > 0 && amount >= total ? 'completed' : amount > 0 ? 'partially_paid' : 'pending',
+          advanceTransactionId: txId,
           notificationId: notifId,
         });
       }
+
       bumpData();
       setShowLogPayment(false);
       setLpAmount('');
@@ -162,7 +174,11 @@ export function BusinessScreen() {
       setLpIsAdvance(false);
       setLpClientId('');
       setLpAccountId('');
-      toast.show(`Logged ${money(amount)} ${currency} from client`);
+      if (amount > 0) {
+        toast.show(`Logged ${money(amount)} ${currency} from client`);
+      } else {
+        toast.show('Forecast payment created');
+      }
     } finally {
       setSaving(false);
     }
@@ -179,18 +195,63 @@ export function BusinessScreen() {
           <Pressable onPress={() => setShowLogPayment(true)} style={s.headerBtn}>
             <Text style={s.headerBtnText}>Log payment</Text>
           </Pressable>
-          <Pressable onPress={() => setShowAdd(true)} hitSlop={8}>
-            <Plus size={20} color={colors.gold} />
+          <Pressable onPress={() => setShowAdd(true)} style={[s.headerBtn, s.addClientBtn]}>
+            <UserPlus size={14} color={colors.bg} style={{ marginRight: 4 }} />
+            <Text style={s.addClientBtnText}>Add client</Text>
           </Pressable>
         </View>
       </View>
 
-      {expectedIncome > 0 && (
-        <View style={s.expectedBox}>
-          <Text style={s.expectedLabel}>Expected income</Text>
-          <Text style={s.expectedAmount}>{money(expectedIncome)} {currency}</Text>
-          <Text style={s.expectedSub}>from {scheduled.length} open payment(s)</Text>
-        </View>
+      {/* Expected income card — tappable */}
+      {(expectedIncome > 0 || receivedTotal > 0) && (
+        <Pressable
+          style={s.expectedBox}
+          onPress={() => navigation.navigate('ExpectedPayments')}
+        >
+          <View style={s.expectedTopRow}>
+            <View>
+              <Text style={s.expectedLabel}>Expected income</Text>
+              <Text style={s.expectedAmount}>{money(expectedIncome)} {currency}</Text>
+              <Text style={s.expectedSub}>from {scheduled.length} open payment(s) · tap to manage</Text>
+            </View>
+            <View style={s.receivedBadge}>
+              <Text style={s.receivedLabel}>Received</Text>
+              <Text style={s.receivedAmt}>{money(receivedTotal)}</Text>
+            </View>
+          </View>
+
+          {/* Progress graph */}
+          {grandTotal > 0 && (
+            <View style={s.graphContainer}>
+              <View style={s.graphBar}>
+                {/* Received portion */}
+                <View
+                  style={[
+                    s.graphSegmentGreen,
+                    { flex: receivedRatio },
+                  ]}
+                />
+                {/* Outstanding portion */}
+                <View
+                  style={[
+                    s.graphSegmentGold,
+                    { flex: 1 - receivedRatio },
+                  ]}
+                />
+              </View>
+              <View style={s.graphLegend}>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: colors.green }]} />
+                  <Text style={s.legendText}>Received ({Math.round(receivedRatio * 100)}%)</Text>
+                </View>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: colors.gold }]} />
+                  <Text style={s.legendText}>Outstanding</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </Pressable>
       )}
 
       {top3.length > 0 && (
@@ -216,7 +277,7 @@ export function BusinessScreen() {
 
       <Text style={s.sectionLabel}>All clients</Text>
       {clients.length === 0
-        ? <Text style={s.empty}>No clients yet. Tap + to add one.</Text>
+        ? <Text style={s.empty}>No clients yet.</Text>
         : clients.filter(c => !c.isArchived).map(c => {
           const total = transactions.filter(t => t.clientId === c.id).reduce((s, t) => s + t.amount, 0);
           return (
@@ -237,6 +298,12 @@ export function BusinessScreen() {
         })
       }
 
+      {/* "Add client" footer row (always visible in All clients section) */}
+      <Pressable style={s.addClientRow} onPress={() => setShowAdd(true)}>
+        <UserPlus size={16} color={colors.gold} />
+        <Text style={s.addClientRowText}>Add new client</Text>
+      </Pressable>
+
       {showAdd && (
         <Sheet title="Add client" onClose={() => setShowAdd(false)}>
           <Field label="Name"><Input value={addName} onChangeText={setAddName} placeholder="Client name" autoFocus /></Field>
@@ -250,17 +317,31 @@ export function BusinessScreen() {
       {showLogPayment && (
         <Sheet title="Log client payment" onClose={() => setShowLogPayment(false)}>
           <Field label="Client">
-            <Select title="Client" value={lpClientId} options={[{ value: '', label: 'Select client' }, ...clientOptions]} onChange={setLpClientId} />
+            <Select
+              title="Client"
+              value={lpClientId}
+              options={[{ value: '', label: 'Select client' }, ...clientOptions]}
+              onChange={setLpClientId}
+            />
           </Field>
-          <Field label="Account received into">
-            <Select title="Account" value={lpAccountId} options={[{ value: '', label: 'Select account' }, ...accountOptions]} onChange={setLpAccountId} />
-          </Field>
-          <Field label="Amount received">
+          {/* Inline "add client" link in the sheet */}
+          <Pressable style={s.inlineAddClient} onPress={() => { setShowLogPayment(false); setShowAdd(true); }}>
+            <UserPlus size={13} color={colors.gold} />
+            <Text style={s.inlineAddClientText}>Add new client</Text>
+          </Pressable>
+
+          <Field label="Amount received (enter 0 for forecast)">
             <Input value={lpAmount} onChangeText={setLpAmount} keyboardType="decimal-pad" placeholder="0" />
           </Field>
 
+          {parseFloat(lpAmount) > 0 && (
+            <Field label="Account received into">
+              <Select title="Account" value={lpAccountId} options={[{ value: '', label: 'Select account' }, ...accountOptions]} onChange={setLpAccountId} />
+            </Field>
+          )}
+
           <Pressable style={s.toggleRow} onPress={() => setLpIsAdvance(v => !v)}>
-            <Text style={s.toggleLabel}>Is this an advance?</Text>
+            <Text style={s.toggleLabel}>Create scheduled payment?</Text>
             <View style={[s.toggle, lpIsAdvance && s.toggleOn]}>
               <View style={[s.toggleThumb, lpIsAdvance && s.toggleThumbOn]} />
             </View>
@@ -271,13 +352,21 @@ export function BusinessScreen() {
               <Field label="Total agreed amount">
                 <Input value={lpTotalAgreed} onChangeText={setLpTotalAgreed} keyboardType="decimal-pad" placeholder="0" />
               </Field>
-              <Field label="Due date (YYYY-MM-DD, optional)">
-                <Input value={lpDueDate} onChangeText={setLpDueDate} placeholder={todayIso()} />
+              <Field label="Due date (optional)">
+                <DatePickerField value={lpDueDate} onChange={setLpDueDate} placeholder="Pick a date" />
               </Field>
             </>
           )}
 
-          {saving ? <ActivityIndicator color={colors.gold} /> : <Button title="Log payment" onPress={handleLogPayment} disabled={!lpClientId || !lpAccountId || !lpAmount} style={{ marginTop: 8 }} />}
+          {saving
+            ? <ActivityIndicator color={colors.gold} />
+            : <Button
+                title="Log payment"
+                onPress={handleLogPayment}
+                disabled={!lpClientId || (!lpAmount && !lpIsAdvance)}
+                style={{ marginTop: 8 }}
+              />
+          }
         </Sheet>
       )}
     </ScrollView>
@@ -289,9 +378,25 @@ const s = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   heading: { fontSize: 22, fontWeight: '600', color: colors.text },
-  headerBtns: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  headerBtn: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radii.sm, paddingHorizontal: 10, paddingVertical: 6 },
+  headerBtns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerBtn: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
   headerBtnText: { fontSize: typeScale.sm, color: colors.gold },
+  addClientBtn: {
+    backgroundColor: colors.gold,
+    borderColor: colors.gold,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  addClientBtnText: { fontSize: typeScale.sm, color: colors.bg, fontWeight: '600' },
+
+  // Expected box
   expectedBox: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -300,9 +405,31 @@ const s = StyleSheet.create({
     padding: 14,
     marginBottom: 20,
   },
-  expectedLabel: { fontSize: typeScale.xs, color: colors.faint, textTransform: 'uppercase', letterSpacing: 0.4 },
-  expectedAmount: { fontSize: 24, fontWeight: '700', color: colors.green, marginVertical: 4 },
+  expectedTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  expectedLabel: { fontSize: typeScale.xs, color: colors.faint, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
+  expectedAmount: { fontSize: 24, fontWeight: '700', color: colors.gold, marginBottom: 2 },
   expectedSub: { fontSize: typeScale.sm, color: colors.dim },
+  receivedBadge: { alignItems: 'flex-end' },
+  receivedLabel: { fontSize: typeScale.xs, color: colors.faint, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
+  receivedAmt: { fontSize: typeScale.xl, fontWeight: '700', color: colors.green },
+
+  // Graph
+  graphContainer: { marginTop: 4 },
+  graphBar: {
+    height: 10,
+    flexDirection: 'row',
+    borderRadius: radii.full,
+    overflow: 'hidden',
+    backgroundColor: colors.border,
+    marginBottom: 8,
+  },
+  graphSegmentGreen: { backgroundColor: colors.green },
+  graphSegmentGold: { backgroundColor: colors.gold },
+  graphLegend: { flexDirection: 'row', gap: 16 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: typeScale.xs, color: colors.dim },
+
   sectionLabel: { fontSize: typeScale.sm, color: colors.faint, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 10 },
   topGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   topTile: {
@@ -335,6 +462,33 @@ const s = StyleSheet.create({
   clientName: { fontSize: typeScale.lg, color: colors.text },
   clientTotal: { fontSize: typeScale.md, color: colors.dim },
   empty: { fontSize: typeScale.md, color: colors.faint, paddingVertical: 12 },
+
+  // Add client footer in list
+  addClientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    borderRadius: radii.md,
+  },
+  addClientRowText: { fontSize: typeScale.md, color: colors.gold },
+
+  // Inline add client in log-payment sheet
+  inlineAddClient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.md,
+    marginTop: -4,
+  },
+  inlineAddClientText: { fontSize: typeScale.sm, color: colors.gold },
+
+  // Toggle
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
   toggleLabel: { fontSize: typeScale.lg, color: colors.text },
   toggle: { width: 44, height: 24, borderRadius: 12, backgroundColor: colors.border, justifyContent: 'center', padding: 2 },

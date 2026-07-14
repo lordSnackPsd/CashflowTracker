@@ -231,6 +231,8 @@ export function AccountDetailScreen() {
         dueDate: null,
         sortOrder: null,
         startDate: todayIso(),
+        endDate: null,
+        interestRate: null,
         status: 'active',
       });
 

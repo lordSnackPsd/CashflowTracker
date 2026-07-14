@@ -13,3 +13,4 @@ export { ProgressBar } from './ProgressBar';
 export { Gauge } from './Gauge';
 export { Toast, useToast, ToastProvider } from './Toast';
 export { Select, type SelectOption } from './Select';
+export { DatePickerField } from './DatePickerField';

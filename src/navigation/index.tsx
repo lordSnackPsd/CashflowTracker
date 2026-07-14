@@ -39,6 +39,7 @@ import { CashManagementScreen } from '../screens/cash/CashManagementScreen';
 import { AccountDetailScreen } from '../screens/cash/AccountDetailScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
 import { ArchiveScreen } from '../screens/settings/ArchiveScreen';
+import { ExpectedPaymentsScreen } from '../screens/business/ExpectedPaymentsScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const Drawer = createDrawerNavigator<DrawerParamList>();
@@ -178,6 +179,7 @@ export function AppNavigation() {
         <Stack.Screen name="CategoryDetail" component={CategoryDetailScreen} />
         <Stack.Screen name="TransactionDetail" component={TransactionDetailScreen} />
         <Stack.Screen name="Archive" component={ArchiveScreen} />
+        <Stack.Screen name="ExpectedPayments" component={ExpectedPaymentsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

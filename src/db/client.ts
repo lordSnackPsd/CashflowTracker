@@ -37,6 +37,15 @@ export async function initDb(): Promise<void> {
       [newId()],
     );
   }
+
+  // Migrations — ALTER TABLE is idempotent via try/catch (SQLite throws on duplicate column)
+  const migrations = [
+    `ALTER TABLE debts ADD COLUMN end_date TEXT`,
+    `ALTER TABLE debts ADD COLUMN interest_rate REAL`,
+  ];
+  for (const m of migrations) {
+    try { await database.execute(m); } catch (_) { /* column already exists */ }
+  }
 }
 
 /** Test/backup hook — closes the connection so the file can be replaced. */

@@ -23,4 +23,5 @@ export type RootStackParamList = {
   CategoryDetail: { categoryId: string };
   TransactionDetail: { transactionId: string };
   Archive: undefined;
+  ExpectedPayments: undefined;
 };

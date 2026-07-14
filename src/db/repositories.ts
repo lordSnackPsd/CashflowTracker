@@ -125,6 +125,8 @@ function mapDebt(r: Row): Debt {
     dueDate: strOrNull(r.due_date),
     sortOrder: numOrNull(r.sort_order),
     startDate: strOrNull(r.start_date),
+    endDate: strOrNull(r.end_date),
+    interestRate: numOrNull(r.interest_rate),
     status: r.status as Debt['status'],
     isArchived: bool(r.is_archived),
     archivedAt: strOrNull(r.archived_at),
@@ -734,12 +736,12 @@ const debts: DebtsRepo = {
     await getDb().execute(
       `INSERT INTO debts (id, name, debt_type, linked_account_id, counterparty, principal_disbursed,
         credit_limit, available_balance, total_interest_paid, total_owed, monthly_amount, due_date,
-        sort_order, start_date, status, is_archived, archived_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)`,
+        sort_order, start_date, end_date, interest_rate, status, is_archived, archived_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)`,
       [id, input.name, input.debtType, input.linkedAccountId, input.counterparty,
        input.principalDisbursed, input.creditLimit, input.availableBalance,
        input.totalInterestPaid, input.totalOwed, input.monthlyAmount, input.dueDate,
-       input.sortOrder, input.startDate, input.status],
+       input.sortOrder, input.startDate, input.endDate ?? null, input.interestRate ?? null, input.status],
     );
     return (await debts.get(id))!;
   },
@@ -751,7 +753,8 @@ const debts: DebtsRepo = {
       creditLimit: 'credit_limit', availableBalance: 'available_balance',
       totalInterestPaid: 'total_interest_paid', totalOwed: 'total_owed',
       monthlyAmount: 'monthly_amount', dueDate: 'due_date', sortOrder: 'sort_order',
-      startDate: 'start_date', status: 'status',
+      startDate: 'start_date', endDate: 'end_date', interestRate: 'interest_rate',
+      status: 'status',
     };
     const sets: string[] = [];
     const params: unknown[] = [];
