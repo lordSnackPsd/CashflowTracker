@@ -177,7 +177,7 @@ export function SettingsScreen() {
         <ChevronRight size={14} color={colors.faint} />
       </Pressable>
 
-      {showImportSheet && (
+       {showImportSheet && (
         <Sheet title="Import Backup" onClose={() => setShowImportSheet(false)}>
           <Text style={s.reconNote}>
             Warning: Importing a backup will overwrite all current on-device data.
@@ -202,6 +202,11 @@ export function SettingsScreen() {
           )}
         </Sheet>
       )}
+
+      <View style={s.attributionContainer}>
+        <Text style={s.attributionText}>This app is developed and maintained by</Text>
+        <Text style={s.attributionTextBold}>AMADYN STUDIO - @LORDSNACK.PSD</Text>
+      </View>
     </ScrollView>
   );
 }
@@ -217,4 +222,21 @@ const s = StyleSheet.create({
   comingSoon: { fontSize: typeScale.sm, color: colors.faint, fontStyle: 'italic' },
   saveBtn: { marginTop: 20 },
   reconNote: { fontSize: typeScale.md, color: colors.dim, marginBottom: 12 },
+  attributionContainer: {
+    marginTop: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attributionText: {
+    fontSize: typeScale.sm,
+    color: colors.faint,
+    textAlign: 'center',
+  },
+  attributionTextBold: {
+    fontSize: typeScale.sm,
+    color: colors.gold,
+    fontWeight: '600',
+    marginTop: 2,
+    textAlign: 'center',
+  },
 });
