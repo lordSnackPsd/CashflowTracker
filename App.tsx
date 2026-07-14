@@ -13,7 +13,7 @@ function SplashScreen({ onFinish }: { onFinish: () => void }) {
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Show splash for 4.5s, then fade out over 500ms (total 5s)
+    // Show splash for 14.5s, then fade out over 500ms (total 15s)
     const timer = setTimeout(() => {
       Animated.timing(fadeAnim, {
         toValue: 0,
@@ -22,7 +22,7 @@ function SplashScreen({ onFinish }: { onFinish: () => void }) {
       }).start(() => {
         onFinish();
       });
-    }, 4500);
+    }, 14500);
 
     return () => clearTimeout(timer);
   }, [fadeAnim, onFinish]);
